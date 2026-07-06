@@ -1,0 +1,28 @@
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const required = ['DATABASE_URL', 'JWT_SECRET'];
+
+for (const key of required) {
+  if (!process.env[key]) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+}
+
+export const env = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: Number(process.env.PORT || 3000),
+  databaseUrl: process.env.DATABASE_URL,
+  jwtSecret: process.env.JWT_SECRET,
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  publicCardBaseUrl: process.env.PUBLIC_CARD_BASE_URL || 'http://localhost:3000/public/cards',
+  otpTtlMinutes: Number(process.env.OTP_TTL_MINUTES || 1440),
+  otpMaxUses: Number(process.env.OTP_MAX_USES || 10),
+  loginOtpTtlMinutes: Number(process.env.LOGIN_OTP_TTL_MINUTES || 10),
+  serviceSessionExpiresIn: process.env.SERVICE_SESSION_EXPIRES_IN || '24h',
+  serviceCreditCost: Number(process.env.SERVICE_CREDIT_COST || 1),
+  adminName: process.env.ADMIN_NAME || 'System Admin',
+  adminMobile: process.env.ADMIN_MOBILE || '09120000000',
+  adminPassword: process.env.ADMIN_PASSWORD || 'admin123456'
+};
