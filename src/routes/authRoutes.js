@@ -215,14 +215,14 @@ authRoutes.post('/shops/register', validate(shopRegisterSchema), asyncHandler(as
   const passwordHash = await bcrypt.hash(data.password, 12);
   const userResult = await query(
     `insert into users(role, name, mobile, password_hash, status)
-     values('shop', $1, $2, $3, 'pending')
+     values('shop', $1, $2, $3, 'active')
      returning id, role, name, mobile, status`,
     [data.owner_name, data.mobile, passwordHash]
   );
 
   const shopResult = await query(
     `insert into shops(owner_user_id, name, owner_name, mobile, phone, address, postal_code, dedicated_code, status)
-     values($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+     values($1, $2, $3, $4, $5, $6, $7, $8, 'active')
      returning *`,
     [
       userResult.rows[0].id,
