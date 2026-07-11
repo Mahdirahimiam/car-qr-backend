@@ -11,7 +11,14 @@ for (const key of required) {
 }
 
 function publicCardBaseUrl() {
-  const baseUrl = (process.env.PUBLIC_CARD_BASE_URL || 'https://car-qr-backend.runsite.app/').replace(/\/$/, '');
+  const configuredBaseUrl = process.env.PUBLIC_CARD_BASE_URL || 'https://car-qr-backend.runsite.app/';
+  const shouldUseProductionDefault =
+    process.env.NODE_ENV === 'production' &&
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(configuredBaseUrl);
+  const baseUrl = (shouldUseProductionDefault
+    ? 'https://car-qr-backend.runsite.app/'
+    : configuredBaseUrl
+  ).replace(/\/$/, '');
   return baseUrl.endsWith('/public/cards') ? baseUrl : `${baseUrl}/public/cards`;
 }
 
