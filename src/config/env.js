@@ -10,13 +10,18 @@ for (const key of required) {
   }
 }
 
+function publicCardBaseUrl() {
+  const baseUrl = (process.env.PUBLIC_CARD_BASE_URL || 'https://car-qr-backend.runsite.app/').replace(/\/$/, '');
+  return baseUrl.endsWith('/public/cards') ? baseUrl : `${baseUrl}/public/cards`;
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3000),
   databaseUrl: process.env.DATABASE_URL,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  publicCardBaseUrl: process.env.PUBLIC_CARD_BASE_URL || 'http://localhost:3000/public/cards',
+  publicCardBaseUrl: publicCardBaseUrl(),
   otpTtlMinutes: Number(process.env.OTP_TTL_MINUTES || 1440),
   otpMaxUses: Number(process.env.OTP_MAX_USES || 10),
   loginOtpTtlMinutes: Number(process.env.LOGIN_OTP_TTL_MINUTES || 10),
