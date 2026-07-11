@@ -11,10 +11,10 @@ for (const key of required) {
 }
 
 function publicCardBaseUrl() {
-  const configuredBaseUrl = process.env.PUBLIC_CARD_BASE_URL || 'https://car-qr-backend.runsite.app/';
+  const configuredBaseUrl = process.env.PUBLIC_CARD_BASE_URL || 'https://car-qr-front.vercel.app/';
   const shouldUseProductionDefault = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(configuredBaseUrl);
   const baseUrl = (shouldUseProductionDefault
-    ? 'https://car-qr-backend.runsite.app/'
+    ? 'https://car-qr-front.vercel.app/'
     : configuredBaseUrl
   ).replace(/\/$/, '');
   return baseUrl.endsWith('/public/cards') ? baseUrl : `${baseUrl}/public/cards`;
