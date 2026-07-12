@@ -81,7 +81,7 @@ export async function activateCard({
     }
 
     const shopResult = await client.query(
-      `select id, card_quota_balance
+      `select id, credit_balance
        from shops
        where id = $1 and status = 'active' and deleted_at is null
        for update`,
@@ -91,8 +91,8 @@ export async function activateCard({
     if (!shop) {
       throw forbidden('Shop is not active');
     }
-    if (shop.card_quota_balance < 1) {
-      throw badRequest('Shop card quota is not enough');
+    if (shop.credit_balance < env.serviceCreditCost) {
+      throw badRequest('Shop credit is not enough');
     }
 
     const cardResult = await client.query(
@@ -144,17 +144,11 @@ export async function activateCard({
 
     await client.query(
       `update shops
-       set card_quota_balance = card_quota_balance - 1,
+       set credit_balance = credit_balance - $1,
            updated_at = now()
-       where id = $1`,
-      [shopId]
+       where id = $2`,
+      [env.serviceCreditCost, shopId]
     );
-    await client.query(
-      `insert into card_quota_transactions(shop_id, type, amount, description, card_id)
-       values($1, 'consume', -1, $2, $3)`,
-      [shopId, 'Card activation quota consumption', card.id]
-    );
-
     const serviceRow = await insertService(client, {
       ...service,
       vehicleId: vehicleResult.rows[0].id,
@@ -162,6 +156,12 @@ export async function activateCard({
       shopId,
       consumeCredit: false
     });
+
+    await client.query(
+      `insert into credit_transactions(shop_id, type, amount, description, service_id)
+       values($1, 'consume', $2, $3, $4)`,
+      [shopId, -env.serviceCreditCost, 'Card activation credit consumption', serviceRow.id]
+    );
 
     await writeAudit(client, actorUserId, 'cards.activate', 'card', card.id, {
       customerId: customerResult.rows[0].id,

@@ -236,5 +236,20 @@ authRoutes.post('/shops/register', validate(shopRegisterSchema), asyncHandler(as
     ]
   );
 
-  res.status(201).json({ user: userResult.rows[0], shop: shopResult.rows[0] });
+  const token = jwt.sign(
+    { sub: userResult.rows[0].id, role: 'shop', session_type: 'full' },
+    env.jwtSecret,
+    { expiresIn: env.serviceSessionExpiresIn }
+  );
+
+  res.status(201).json({
+    token,
+    expires_in_hours: 24,
+    user: {
+      ...userResult.rows[0],
+      shop_id: shopResult.rows[0].id,
+      access: 'full'
+    },
+    shop: shopResult.rows[0]
+  });
 }));
