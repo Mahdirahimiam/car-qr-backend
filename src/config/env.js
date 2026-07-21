@@ -11,7 +11,7 @@ for (const key of required) {
 }
 
 function publicCardBaseUrl() {
-  const baseUrl = (process.env.PUBLIC_CARD_BASE_URL || 'https://car-qr-front.vercel.app/').replace(/\/$/, '');
+  const baseUrl = (process.env.PUBLIC_CARD_BASE_URL || 'https://car-qr-tau.vercel.app/').replace(/\/$/, '');
   return baseUrl.endsWith('/public/cards') ? baseUrl : `${baseUrl}/public/cards`;
 }
 
