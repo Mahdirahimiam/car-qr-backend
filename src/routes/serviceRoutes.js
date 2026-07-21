@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticateServiceAccess } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { query } from '../db/pool.js';
 import { activateCard, registerService, updateLatestService } from '../services/cardService.js';
 import { getPublicCard } from '../services/publicService.js';
 
@@ -24,9 +25,26 @@ const serviceSchema = z.object({
 serviceRoutes.get('/cards/:token', validate(z.object({
   params: z.object({ token: z.string().min(10) })
 })), asyncHandler(async (req, res) => {
-  const card = await getPublicCard(req.params.token);
+  const [card, shopResult, optionsResult] = await Promise.all([
+    getPublicCard(req.params.token),
+    query(
+      `select id, name, mobile, phone
+       from shops where id = $1 and deleted_at is null`,
+      [req.user.shop_id]
+    ),
+    query(
+      `select distinct option
+       from services s
+       cross join lateral unnest(s.replaced_filters) as service_option(option)
+       where s.shop_id = $1 and s.deleted_at is null and btrim(option) <> ''
+       order by option`,
+      [req.user.shop_id]
+    )
+  ]);
   res.json({
     ...card,
+    current_shop: shopResult.rows[0] || null,
+    service_options: optionsResult.rows.map((row) => row.option),
     access: {
       shop_id: req.user.shop_id,
       service_only: req.auth.serviceOnly,

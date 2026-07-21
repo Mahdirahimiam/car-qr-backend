@@ -73,12 +73,47 @@ adminRoutes.get('/dashboard', asyncHandler(async (_req, res) => {
 
 adminRoutes.get('/shops', asyncHandler(async (req, res) => {
   const result = await query(
-    `select * from shops
-     where deleted_at is null and ($1::text is null or status = $1)
-     order by created_at desc`,
+    `select s.*,
+            coalesce(activity.service_count, 0)::int as service_count,
+            activity.latest_service_at
+     from shops s
+     left join lateral (
+       select count(*)::int as service_count, max(se.created_at) as latest_service_at
+       from services se
+       where se.shop_id = s.id and se.deleted_at is null
+     ) activity on true
+     where s.deleted_at is null and ($1::text is null or s.status = $1)
+     order by s.created_at desc`,
     [req.query.status || null]
   );
   res.json(result.rows.map(safeShop));
+}));
+
+adminRoutes.get('/customers', asyncHandler(async (_req, res) => {
+  const result = await query(`
+    select c.id, c.name, c.mobile, c.status, c.created_at,
+           coalesce(activity.vehicle_count, 0)::int as vehicle_count,
+           coalesce(activity.service_count, 0)::int as service_count,
+           activity.latest_service_at,
+           activity.latest_shop_name,
+           coalesce(activity.vehicle_types, '{}') as vehicle_types
+    from customers c
+    left join lateral (
+      select
+        count(distinct v.id)::int as vehicle_count,
+        count(se.id)::int as service_count,
+        max(se.created_at) as latest_service_at,
+        (array_agg(sh.name order by se.created_at desc) filter (where se.id is not null))[1] as latest_shop_name,
+        array_agg(distinct v.type) filter (where v.type is not null) as vehicle_types
+      from vehicles v
+      left join services se on se.vehicle_id = v.id and se.deleted_at is null
+      left join shops sh on sh.id = se.shop_id
+      where v.customer_id = c.id and v.deleted_at is null
+    ) activity on true
+    where c.deleted_at is null
+    order by activity.latest_service_at desc nulls last, c.created_at desc
+  `);
+  res.json(result.rows);
 }));
 
 adminRoutes.post('/shops', validate(createShopSchema), asyncHandler(async (req, res) => {
