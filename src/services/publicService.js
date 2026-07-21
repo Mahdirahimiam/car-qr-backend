@@ -4,7 +4,8 @@ import { notFound } from '../utils/errors.js';
 export async function getPublicCard(token) {
   const cardResult = await query(
     `select c.id, c.public_token, c.status, c.activated_at,
-            s.name as shop_name, s.mobile as shop_mobile, s.phone as shop_phone,
+            s.name as shop_name, s.phone as shop_phone,
+            s.phone_secondary as shop_phone_secondary,
             s.address as shop_address, s.logo_url, s.promotional_text,
             v.id as vehicle_id, v.type as vehicle_type, v.plate, v.color, v.description as vehicle_description,
             cu.name as customer_name
@@ -26,8 +27,9 @@ export async function getPublicCard(token) {
         `select se.id, se.shop_id, se.service_date, se.current_mileage,
                 se.oil_type, se.oil_life_km, se.next_service_mileage,
                 se.next_service_date, se.replaced_filters, se.description,
-                se.created_at, s.name as shop_name, s.mobile as shop_mobile,
-                s.phone as shop_phone, s.address as shop_address,
+                se.created_at, s.name as shop_name,
+                s.phone as shop_phone, s.phone_secondary as shop_phone_secondary,
+                s.address as shop_address,
                 s.logo_url, s.promotional_text
          from services se
          join shops s on s.id = se.shop_id
@@ -48,8 +50,8 @@ export async function getPublicCard(token) {
     },
     shop: {
       name: latestService?.shop_name || card.shop_name,
-      mobile: latestService?.shop_mobile || card.shop_mobile,
       phone: latestService?.shop_phone || card.shop_phone,
+      phone_secondary: latestService?.shop_phone_secondary || card.shop_phone_secondary,
       address: latestService?.shop_address || card.shop_address,
       logo_url: latestService?.logo_url || card.logo_url,
       promotional_text: latestService?.promotional_text || card.promotional_text

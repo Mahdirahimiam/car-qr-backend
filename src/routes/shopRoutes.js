@@ -35,6 +35,7 @@ const updateShopSchema = z.object({
     name: z.string().min(2).optional(),
     owner_name: z.string().min(2).optional(),
     phone: z.string().optional().nullable(),
+    phone_secondary: z.string().optional().nullable(),
     address: z.string().optional().nullable(),
     postal_code: z.string().optional().nullable(),
     logo_url: z.string().optional().nullable(),
@@ -44,7 +45,7 @@ const updateShopSchema = z.object({
 
 shopRoutes.get('/me', asyncHandler(async (req, res) => {
   const result = await query(
-    `select id, owner_user_id, name, owner_name, mobile, phone, address,
+    `select id, owner_user_id, name, owner_name, mobile, phone, phone_secondary, address,
             postal_code, dedicated_code, logo_url, promotional_text,
             credit_balance, card_quota_balance, status, created_at, updated_at
      from shops where id = $1 and deleted_at is null`,
@@ -69,7 +70,10 @@ shopRoutes.patch('/me', validate(updateShopSchema), asyncHandler(async (req, res
   const next = {
     name: req.body.name ?? current.name,
     owner_name: req.body.owner_name ?? current.owner_name,
-    phone: req.body.phone ?? current.phone,
+    phone: req.body.phone === undefined ? current.phone : req.body.phone,
+    phone_secondary: req.body.phone_secondary === undefined
+      ? current.phone_secondary
+      : req.body.phone_secondary,
     address: req.body.address ?? current.address,
     postal_code: req.body.postal_code ?? current.postal_code,
     logo_url: req.body.logo_url ?? current.logo_url,
@@ -81,19 +85,21 @@ shopRoutes.patch('/me', validate(updateShopSchema), asyncHandler(async (req, res
      set name = $1,
          owner_name = $2,
          phone = $3,
-         address = $4,
-         postal_code = $5,
-         logo_url = $6,
-         promotional_text = $7,
+         phone_secondary = $4,
+         address = $5,
+         postal_code = $6,
+         logo_url = $7,
+         promotional_text = $8,
          updated_at = now()
-     where id = $8
-     returning id, owner_user_id, name, owner_name, mobile, phone, address,
+     where id = $9
+     returning id, owner_user_id, name, owner_name, mobile, phone, phone_secondary, address,
                postal_code, dedicated_code, logo_url, promotional_text,
                credit_balance, card_quota_balance, status, created_at, updated_at`,
     [
       next.name,
       next.owner_name,
       next.phone,
+      next.phone_secondary,
       next.address,
       next.postal_code,
       next.logo_url,

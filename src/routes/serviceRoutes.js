@@ -28,7 +28,7 @@ serviceRoutes.get('/cards/:token', validate(z.object({
   const [card, shopResult, optionsResult] = await Promise.all([
     getPublicCard(req.params.token),
     query(
-      `select id, name, mobile, phone
+      `select id, name, phone, phone_secondary
        from shops where id = $1 and deleted_at is null`,
       [req.user.shop_id]
     ),

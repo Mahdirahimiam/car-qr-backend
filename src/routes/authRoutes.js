@@ -27,6 +27,7 @@ const shopRegisterSchema = z.object({
     mobile: z.string().min(5),
     password: z.string().min(6),
     phone: z.string().optional(),
+    phone_secondary: z.string().optional(),
     address: z.string().optional(),
     postal_code: z.string().optional()
   })
@@ -221,8 +222,8 @@ authRoutes.post('/shops/register', validate(shopRegisterSchema), asyncHandler(as
   );
 
   const shopResult = await query(
-    `insert into shops(owner_user_id, name, owner_name, mobile, phone, address, postal_code, dedicated_code, status)
-     values($1, $2, $3, $4, $5, $6, $7, $8, 'active')
+    `insert into shops(owner_user_id, name, owner_name, mobile, phone, phone_secondary, address, postal_code, dedicated_code, status)
+     values($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')
      returning *`,
     [
       userResult.rows[0].id,
@@ -230,6 +231,7 @@ authRoutes.post('/shops/register', validate(shopRegisterSchema), asyncHandler(as
       data.owner_name,
       data.mobile,
       data.phone || null,
+      data.phone_secondary || null,
       data.address || null,
       data.postal_code || null,
       generateShopCode()

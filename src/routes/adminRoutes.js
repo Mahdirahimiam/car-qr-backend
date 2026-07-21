@@ -30,6 +30,7 @@ const createShopSchema = z.object({
     mobile: z.string().min(5),
     password: z.string().min(6).optional(),
     phone: z.string().optional(),
+    phone_secondary: z.string().optional(),
     address: z.string().optional(),
     postal_code: z.string().optional(),
     credit_balance: z.number().int().min(0).optional(),
@@ -45,6 +46,7 @@ const updateShopSchema = z.object({
     owner_name: z.string().min(2).optional(),
     mobile: z.string().min(5).optional(),
     phone: z.string().optional().nullable(),
+    phone_secondary: z.string().optional().nullable(),
     address: z.string().optional().nullable(),
     postal_code: z.string().optional().nullable(),
     logo_url: z.string().optional().nullable(),
@@ -127,9 +129,9 @@ adminRoutes.post('/shops', validate(createShopSchema), asyncHandler(async (req, 
     );
 
     const shopResult = await client.query(
-      `insert into shops(owner_user_id, name, owner_name, mobile, phone, address, postal_code,
+      `insert into shops(owner_user_id, name, owner_name, mobile, phone, phone_secondary, address, postal_code,
                          dedicated_code, credit_balance, card_quota_balance, status)
-       values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        returning *`,
       [
         userResult.rows[0].id,
@@ -137,6 +139,7 @@ adminRoutes.post('/shops', validate(createShopSchema), asyncHandler(async (req, 
         req.body.owner_name,
         req.body.mobile,
         req.body.phone || null,
+        req.body.phone_secondary || null,
         req.body.address || null,
         req.body.postal_code || null,
         generateShopCode(),
@@ -170,7 +173,10 @@ adminRoutes.patch('/shops/:id', validate(updateShopSchema), asyncHandler(async (
       name: req.body.name ?? current.name,
       owner_name: req.body.owner_name ?? current.owner_name,
       mobile: req.body.mobile ?? current.mobile,
-      phone: req.body.phone ?? current.phone,
+      phone: req.body.phone === undefined ? current.phone : req.body.phone,
+      phone_secondary: req.body.phone_secondary === undefined
+        ? current.phone_secondary
+        : req.body.phone_secondary,
       address: req.body.address ?? current.address,
       postal_code: req.body.postal_code ?? current.postal_code,
       logo_url: req.body.logo_url ?? current.logo_url,
@@ -183,18 +189,20 @@ adminRoutes.patch('/shops/:id', validate(updateShopSchema), asyncHandler(async (
            owner_name = $2,
            mobile = $3,
            phone = $4,
-           address = $5,
-           postal_code = $6,
-           logo_url = $7,
-           promotional_text = $8,
+           phone_secondary = $5,
+           address = $6,
+           postal_code = $7,
+           logo_url = $8,
+           promotional_text = $9,
            updated_at = now()
-       where id = $9
+       where id = $10
        returning *`,
       [
         next.name,
         next.owner_name,
         next.mobile,
         next.phone,
+        next.phone_secondary,
         next.address,
         next.postal_code,
         next.logo_url,
