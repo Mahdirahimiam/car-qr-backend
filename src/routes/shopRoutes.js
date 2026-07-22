@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { forbidden } from '../utils/errors.js';
+import { badRequest, forbidden } from '../utils/errors.js';
 import { query } from '../db/pool.js';
 import { activateCard, registerService } from '../services/cardService.js';
 import { requestOtp } from '../services/otpService.js';
+import { normalizeIranianMobile } from '../utils/mobile.js';
 
 export const shopRoutes = express.Router();
 
@@ -34,6 +35,7 @@ const updateShopSchema = z.object({
   body: z.object({
     name: z.string().min(2).optional(),
     owner_name: z.string().min(2).optional(),
+    otp_mobile: z.string().min(5).optional(),
     phone: z.string().optional().nullable(),
     phone_secondary: z.string().optional().nullable(),
     address: z.string().optional().nullable(),
@@ -45,7 +47,7 @@ const updateShopSchema = z.object({
 
 shopRoutes.get('/me', asyncHandler(async (req, res) => {
   const result = await query(
-    `select id, owner_user_id, name, owner_name, mobile, phone, phone_secondary, address,
+    `select id, owner_user_id, name, owner_name, mobile, otp_mobile, phone, phone_secondary, address,
             postal_code, dedicated_code, logo_url, promotional_text,
             credit_balance, card_quota_balance, status, created_at, updated_at
      from shops where id = $1 and deleted_at is null`,
@@ -67,9 +69,23 @@ shopRoutes.patch('/me', validate(updateShopSchema), asyncHandler(async (req, res
     throw forbidden('Shop profile is missing');
   }
 
+  let otpMobile = current.otp_mobile;
+  if (req.body.otp_mobile !== undefined) {
+    otpMobile = normalizeIranianMobile(req.body.otp_mobile);
+    if (!otpMobile) throw badRequest('Invalid OTP mobile number');
+
+    const duplicate = await query(
+      `select 1 from shops
+       where otp_mobile = $1 and id <> $2 and deleted_at is null`,
+      [otpMobile, current.id]
+    );
+    if (duplicate.rowCount) throw badRequest('OTP mobile already exists');
+  }
+
   const next = {
     name: req.body.name ?? current.name,
     owner_name: req.body.owner_name ?? current.owner_name,
+    otp_mobile: otpMobile,
     phone: req.body.phone === undefined ? current.phone : req.body.phone,
     phone_secondary: req.body.phone_secondary === undefined
       ? current.phone_secondary
@@ -84,20 +100,22 @@ shopRoutes.patch('/me', validate(updateShopSchema), asyncHandler(async (req, res
     `update shops
      set name = $1,
          owner_name = $2,
-         phone = $3,
-         phone_secondary = $4,
-         address = $5,
-         postal_code = $6,
-         logo_url = $7,
-         promotional_text = $8,
+         otp_mobile = $3,
+         phone = $4,
+         phone_secondary = $5,
+         address = $6,
+         postal_code = $7,
+         logo_url = $8,
+         promotional_text = $9,
          updated_at = now()
-     where id = $9
-     returning id, owner_user_id, name, owner_name, mobile, phone, phone_secondary, address,
+     where id = $10
+     returning id, owner_user_id, name, owner_name, mobile, otp_mobile, phone, phone_secondary, address,
                postal_code, dedicated_code, logo_url, promotional_text,
                credit_balance, card_quota_balance, status, created_at, updated_at`,
     [
       next.name,
       next.owner_name,
+      next.otp_mobile,
       next.phone,
       next.phone_secondary,
       next.address,
@@ -181,14 +199,18 @@ shopRoutes.post('/cards/:token/services', validate(z.object({
 shopRoutes.get('/customers', asyncHandler(async (req, res) => {
   const result = await query(
     `select cu.id, cu.name, cu.mobile, v.id as vehicle_id, v.type as vehicle_type,
-            v.plate, c.public_token, max(se.service_date) as last_service_date
-     from cards c
-     join vehicles v on v.id = c.vehicle_id
+            v.plate,
+            (array_agg(c.public_token order by se.service_date desc, se.created_at desc))[1] as public_token,
+            max(se.service_date) as last_service_date
+     from services se
+     join vehicles v on v.id = se.vehicle_id and v.deleted_at is null
      join customers cu on cu.id = v.customer_id
-     left join services se on se.vehicle_id = v.id and se.deleted_at is null
-     where c.shop_id = $1 and c.deleted_at is null
-     group by cu.id, v.id, c.public_token
-     order by max(se.created_at) desc nulls last`,
+     join cards c on c.id = se.card_id and c.deleted_at is null
+     where se.shop_id = $1
+       and se.deleted_at is null
+       and cu.deleted_at is null
+     group by cu.id, v.id
+     order by max(se.created_at) desc`,
     [ownShopId(req)]
   );
   res.json(result.rows);

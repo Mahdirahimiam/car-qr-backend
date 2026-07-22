@@ -10,6 +10,7 @@ import { generateShopCode } from '../utils/crypto.js';
 import { validate } from '../middleware/validate.js';
 import { generateOtpCode } from '../utils/crypto.js';
 import { queueSms } from '../services/smsService.js';
+import { normalizeIranianMobile } from '../utils/mobile.js';
 
 export const authRoutes = express.Router();
 
@@ -25,6 +26,7 @@ const shopRegisterSchema = z.object({
     name: z.string().min(2),
     owner_name: z.string().min(2),
     mobile: z.string().min(5),
+    otp_mobile: z.string().min(5),
     password: z.string().min(6),
     phone: z.string().optional(),
     phone_secondary: z.string().optional(),
@@ -72,16 +74,19 @@ authRoutes.post('/login', validate(loginSchema), asyncHandler(async (req, res) =
 authRoutes.post('/shop-otp/request', validate(z.object({
   body: z.object({ mobile: z.string().min(5) })
 })), asyncHandler(async (req, res) => {
+  const otpMobile = normalizeIranianMobile(req.body.mobile);
+  if (!otpMobile) throw badRequest('Invalid mobile number');
+
   const result = await query(
-    `select s.id, s.mobile
+    `select s.id, s.otp_mobile
      from shops s
      join users u on u.id = s.owner_user_id
-     where s.mobile = $1
+     where s.otp_mobile = $1
        and s.status = 'active'
        and s.deleted_at is null
        and u.status = 'active'
        and u.deleted_at is null`,
-    [req.body.mobile]
+    [otpMobile]
   );
   const shop = result.rows[0];
   if (!shop) throw forbidden('Active shop was not found for this mobile');
@@ -99,7 +104,7 @@ authRoutes.post('/shop-otp/request', validate(z.object({
     [shop.id, code, env.loginOtpTtlMinutes]
   );
   await queueSms({
-    recipient: shop.mobile,
+    recipient: shop.otp_mobile,
     type: 'login_otp',
     body: `کد ورود شما: ${code}`
   });
@@ -117,13 +122,16 @@ authRoutes.post('/shop-otp/verify', validate(z.object({
     code: z.string().min(4)
   })
 })), asyncHandler(async (req, res) => {
+  const otpMobile = normalizeIranianMobile(req.body.mobile);
+  if (!otpMobile) throw badRequest('Invalid mobile number');
+
   const result = await query(
     `select lo.id as otp_id, lo.expires_at, s.id as shop_id,
             u.id, u.role, u.name, u.mobile, u.status
      from login_otps lo
      join shops s on s.id = lo.shop_id
      join users u on u.id = s.owner_user_id
-     where s.mobile = $1
+     where s.otp_mobile = $1
        and lo.code = $2
        and lo.status = 'active'
        and s.status = 'active'
@@ -132,7 +140,7 @@ authRoutes.post('/shop-otp/verify', validate(z.object({
        and u.deleted_at is null
      order by lo.created_at desc
      limit 1`,
-    [req.body.mobile, req.body.code]
+    [otpMobile, req.body.code]
   );
   const user = result.rows[0];
   if (!user || new Date(user.expires_at) < new Date()) {
@@ -208,9 +216,24 @@ authRoutes.post('/service-login', validate(z.object({
 
 authRoutes.post('/shops/register', validate(shopRegisterSchema), asyncHandler(async (req, res) => {
   const data = req.body;
+  const otpMobile = normalizeIranianMobile(data.otp_mobile);
+  if (!otpMobile) {
+    throw badRequest('Invalid OTP mobile number', {
+      fieldErrors: { otp_mobile: ['Enter a valid Iranian mobile number'] }
+    });
+  }
   const exists = await query(`select 1 from users where mobile = $1`, [data.mobile]);
   if (exists.rowCount) {
     throw badRequest('Mobile already exists');
+  }
+  const otpMobileExists = await query(
+    `select 1 from shops where otp_mobile = $1 and deleted_at is null`,
+    [otpMobile]
+  );
+  if (otpMobileExists.rowCount) {
+    throw badRequest('OTP mobile already exists', {
+      fieldErrors: { otp_mobile: ['This mobile number is already registered'] }
+    });
   }
 
   const passwordHash = await bcrypt.hash(data.password, 12);
@@ -222,14 +245,15 @@ authRoutes.post('/shops/register', validate(shopRegisterSchema), asyncHandler(as
   );
 
   const shopResult = await query(
-    `insert into shops(owner_user_id, name, owner_name, mobile, phone, phone_secondary, address, postal_code, dedicated_code, status)
-     values($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')
+    `insert into shops(owner_user_id, name, owner_name, mobile, otp_mobile, phone, phone_secondary, address, postal_code, dedicated_code, status)
+     values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')
      returning *`,
     [
       userResult.rows[0].id,
       data.name,
       data.owner_name,
       data.mobile,
+      otpMobile,
       data.phone || null,
       data.phone_secondary || null,
       data.address || null,
