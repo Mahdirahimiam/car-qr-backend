@@ -9,6 +9,7 @@ import { query, withTransaction } from '../db/pool.js';
 import { generateServicePassword, generateShopCode } from '../utils/crypto.js';
 import { generateCards, listCards } from '../services/cardService.js';
 import { writeAudit } from '../services/auditService.js';
+import { normalizeIranianMobile } from '../utils/mobile.js';
 
 export const adminRoutes = express.Router();
 
@@ -28,6 +29,7 @@ const createShopSchema = z.object({
     name: z.string().min(2),
     owner_name: z.string().min(2),
     mobile: z.string().min(5),
+    otp_mobile: z.string().min(5),
     password: z.string().min(6).optional(),
     phone: z.string().optional(),
     phone_secondary: z.string().optional(),
@@ -45,6 +47,7 @@ const updateShopSchema = z.object({
     name: z.string().min(2).optional(),
     owner_name: z.string().min(2).optional(),
     mobile: z.string().min(5).optional(),
+    otp_mobile: z.string().min(5).optional(),
     phone: z.string().optional().nullable(),
     phone_secondary: z.string().optional().nullable(),
     address: z.string().optional().nullable(),
@@ -119,7 +122,16 @@ adminRoutes.get('/customers', asyncHandler(async (_req, res) => {
 }));
 
 adminRoutes.post('/shops', validate(createShopSchema), asyncHandler(async (req, res) => {
+  const otpMobile = normalizeIranianMobile(req.body.otp_mobile);
+  if (!otpMobile) throw badRequest('Invalid OTP mobile number');
+
   const shop = await withTransaction(async (client) => {
+    const duplicateOtpMobile = await client.query(
+      `select 1 from shops where otp_mobile = $1 and deleted_at is null`,
+      [otpMobile]
+    );
+    if (duplicateOtpMobile.rowCount) throw badRequest('OTP mobile already exists');
+
     const passwordHash = req.body.password ? await bcrypt.hash(req.body.password, 12) : null;
     const userResult = await client.query(
       `insert into users(role, name, mobile, password_hash, status)
@@ -129,15 +141,16 @@ adminRoutes.post('/shops', validate(createShopSchema), asyncHandler(async (req, 
     );
 
     const shopResult = await client.query(
-      `insert into shops(owner_user_id, name, owner_name, mobile, phone, phone_secondary, address, postal_code,
+      `insert into shops(owner_user_id, name, owner_name, mobile, otp_mobile, phone, phone_secondary, address, postal_code,
                          dedicated_code, credit_balance, card_quota_balance, status)
-       values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        returning *`,
       [
         userResult.rows[0].id,
         req.body.name,
         req.body.owner_name,
         req.body.mobile,
+        otpMobile,
         req.body.phone || null,
         req.body.phone_secondary || null,
         req.body.address || null,
@@ -169,10 +182,24 @@ adminRoutes.patch('/shops/:id', validate(updateShopSchema), asyncHandler(async (
     const current = currentResult.rows[0];
     if (!current) throw notFound('Shop not found');
 
+    let otpMobile = current.otp_mobile;
+    if (req.body.otp_mobile !== undefined) {
+      otpMobile = normalizeIranianMobile(req.body.otp_mobile);
+      if (!otpMobile) throw badRequest('Invalid OTP mobile number');
+
+      const duplicateOtpMobile = await client.query(
+        `select 1 from shops
+         where otp_mobile = $1 and id <> $2 and deleted_at is null`,
+        [otpMobile, current.id]
+      );
+      if (duplicateOtpMobile.rowCount) throw badRequest('OTP mobile already exists');
+    }
+
     const next = {
       name: req.body.name ?? current.name,
       owner_name: req.body.owner_name ?? current.owner_name,
       mobile: req.body.mobile ?? current.mobile,
+      otp_mobile: otpMobile,
       phone: req.body.phone === undefined ? current.phone : req.body.phone,
       phone_secondary: req.body.phone_secondary === undefined
         ? current.phone_secondary
@@ -188,19 +215,21 @@ adminRoutes.patch('/shops/:id', validate(updateShopSchema), asyncHandler(async (
        set name = $1,
            owner_name = $2,
            mobile = $3,
-           phone = $4,
-           phone_secondary = $5,
-           address = $6,
-           postal_code = $7,
-           logo_url = $8,
-           promotional_text = $9,
+           otp_mobile = $4,
+           phone = $5,
+           phone_secondary = $6,
+           address = $7,
+           postal_code = $8,
+           logo_url = $9,
+           promotional_text = $10,
            updated_at = now()
-       where id = $10
+       where id = $11
        returning *`,
       [
         next.name,
         next.owner_name,
         next.mobile,
+        next.otp_mobile,
         next.phone,
         next.phone_secondary,
         next.address,
