@@ -10,6 +10,7 @@ import { generateServicePassword, generateShopCode } from '../utils/crypto.js';
 import { generateCards, listCards } from '../services/cardService.js';
 import { writeAudit } from '../services/auditService.js';
 import { normalizeIranianMobile } from '../utils/mobile.js';
+<<<<<<< HEAD
 
 export const adminRoutes = express.Router();
 
@@ -27,6 +28,25 @@ function safeShop(shop) {
 const createShopSchema = z.object({
   body: z.object({
     name: z.string().min(2),
+=======
+
+export const adminRoutes = express.Router();
+
+adminRoutes.use(authenticate, requireRole('admin'));
+
+function safeShop(shop) {
+  if (!shop) return shop;
+  const { service_password_hash: _servicePasswordHash, ...result } = shop;
+  return {
+    ...result,
+    has_service_password: Boolean(_servicePasswordHash)
+  };
+}
+
+const createShopSchema = z.object({
+  body: z.object({
+    name: z.string().min(2),
+>>>>>>> 2739eee6a13a5c548f0af859808a94c192428d90
     owner_name: z.string().min(2),
     mobile: z.string().min(5),
     otp_mobile: z.string().min(5),
@@ -124,6 +144,7 @@ adminRoutes.get('/customers', asyncHandler(async (_req, res) => {
 adminRoutes.post('/shops', validate(createShopSchema), asyncHandler(async (req, res) => {
   const otpMobile = normalizeIranianMobile(req.body.otp_mobile);
   if (!otpMobile) throw badRequest('Invalid OTP mobile number');
+<<<<<<< HEAD
 
   const shop = await withTransaction(async (client) => {
     const duplicateOtpMobile = await client.query(
@@ -148,6 +169,32 @@ adminRoutes.post('/shops', validate(createShopSchema), asyncHandler(async (req, 
       [
         userResult.rows[0].id,
         req.body.name,
+=======
+
+  const shop = await withTransaction(async (client) => {
+    const duplicateOtpMobile = await client.query(
+      `select 1 from shops where otp_mobile = $1 and deleted_at is null`,
+      [otpMobile]
+    );
+    if (duplicateOtpMobile.rowCount) throw badRequest('OTP mobile already exists');
+
+    const passwordHash = req.body.password ? await bcrypt.hash(req.body.password, 12) : null;
+    const userResult = await client.query(
+      `insert into users(role, name, mobile, password_hash, status)
+       values('shop', $1, $2, $3, $4)
+       returning id, role, name, mobile, status`,
+      [req.body.owner_name, req.body.mobile, passwordHash, req.body.status === 'active' ? 'active' : 'pending']
+    );
+
+    const shopResult = await client.query(
+      `insert into shops(owner_user_id, name, owner_name, mobile, otp_mobile, phone, phone_secondary, address, postal_code,
+                         dedicated_code, credit_balance, card_quota_balance, status)
+       values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       returning *`,
+      [
+        userResult.rows[0].id,
+        req.body.name,
+>>>>>>> 2739eee6a13a5c548f0af859808a94c192428d90
         req.body.owner_name,
         req.body.mobile,
         otpMobile,
@@ -224,9 +271,15 @@ adminRoutes.patch('/shops/:id', validate(updateShopSchema), asyncHandler(async (
            promotional_text = $10,
            updated_at = now()
        where id = $11
+<<<<<<< HEAD
        returning *`,
       [
         next.name,
+=======
+       returning *`,
+      [
+        next.name,
+>>>>>>> 2739eee6a13a5c548f0af859808a94c192428d90
         next.owner_name,
         next.mobile,
         next.otp_mobile,

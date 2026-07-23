@@ -1,13 +1,22 @@
+<<<<<<< HEAD
 import express from 'express';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+=======
+import express from 'express';
+import { z } from 'zod';
+import { authenticate, requireRole } from '../middleware/auth.js';
+import { validate } from '../middleware/validate.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+>>>>>>> 2739eee6a13a5c548f0af859808a94c192428d90
 import { badRequest, forbidden } from '../utils/errors.js';
 import { query } from '../db/pool.js';
 import { activateCard, registerService } from '../services/cardService.js';
 import { requestOtp } from '../services/otpService.js';
 import { normalizeIranianMobile } from '../utils/mobile.js';
+<<<<<<< HEAD
 
 export const shopRoutes = express.Router();
 
@@ -20,6 +29,20 @@ function ownShopId(req) {
   return req.user.shop_id;
 }
 
+=======
+
+export const shopRoutes = express.Router();
+
+shopRoutes.use(authenticate, requireRole('shop'));
+
+function ownShopId(req) {
+  if (!req.user.shop_id) {
+    throw forbidden('Shop profile is missing');
+  }
+  return req.user.shop_id;
+}
+
+>>>>>>> 2739eee6a13a5c548f0af859808a94c192428d90
 const serviceSchema = z.object({
   service_date: z.string().date(),
   current_mileage: z.number().int().min(0),
@@ -46,6 +69,7 @@ const updateShopSchema = z.object({
 });
 
 shopRoutes.get('/me', asyncHandler(async (req, res) => {
+<<<<<<< HEAD
   const result = await query(
     `select id, owner_user_id, name, owner_name, mobile, otp_mobile, phone, phone_secondary, address,
             postal_code, dedicated_code, logo_url, promotional_text,
@@ -53,6 +77,15 @@ shopRoutes.get('/me', asyncHandler(async (req, res) => {
      from shops where id = $1 and deleted_at is null`,
     [ownShopId(req)]
   );
+=======
+  const result = await query(
+    `select id, owner_user_id, name, owner_name, mobile, otp_mobile, phone, phone_secondary, address,
+            postal_code, dedicated_code, logo_url, promotional_text,
+            credit_balance, card_quota_balance, status, created_at, updated_at
+     from shops where id = $1 and deleted_at is null`,
+    [ownShopId(req)]
+  );
+>>>>>>> 2739eee6a13a5c548f0af859808a94c192428d90
   res.json(result.rows[0]);
 }));
 
